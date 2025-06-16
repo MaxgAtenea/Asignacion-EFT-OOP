@@ -1,13 +1,16 @@
 import os
 import pandas as pd
+import warnings
+from datetime import datetime
 from . import constants
-from .constants import COLUMNAS_RELEVANTES_BASE
-from .constants import COLUMNAS_PROGRAMAS_EFT_OFERTA
+from .constants import COLUMNAS_EXTERNO
+from .constants import COLUMNAS_COMPLEMENTO
 from .constants import TIPO_COLUMNAS_MAPPING_COMPLEMENTO
 from .constants import TIPO_COLUMNAS_MAPPING_EXTERNO
 from .constants import NOMBRE_COLUMNAS_MAPPING_EXTERNO
 from .constants import NOMBRE_COLUMNAS_MAPPING_COMPLEMENTO
 
+from .utils import exportar_log_errores
 
 class AsignacionBase:
     """
@@ -26,12 +29,12 @@ class AsignacionBase:
         - recursos_disponibles (int): Monto total de recursos disponibles para esta ruta.
         """
         self.recursos_disponibles = recursos_disponibles
-        self.data = None
+        self.data = pd.DataFrame()
         self.__llave_cruce = "codigo_programa" #llave para cruzar los documentos crudos
         self.ruta_cargar = "../input/"
         self.ruta_exportar = "output/"
         self.subdirectorio_resultados = "results/"
-        self.columnas_relevantes = COLUMNAS_RELEVANTES_BASE + COLUMNAS_PROGRAMAS_EFT_OFERTA
+        self.columnas_relevantes = COLUMNAS_EXTERNO + COLUMNAS_COMPLEMENTO
         self.errores_validacion = []
     
     # TO DO: En el contrato de la función está pendiente especificar las condiciones que se esperan de ruta_archivo_externo (archvio que viene de otra area)
@@ -41,7 +44,7 @@ class AsignacionBase:
         Carga y preprocesa los datos de entrada necesarios para la asignación.
     
         Args:
-            ruta_archivo_externo (str): Ruta a un archivo Excel (.xlsx). Debe existir y ser legible por pandas.
+            ruta_archivo_externo (str): Ruta a un archivo Excel (.xlsx). Debe existir y ser legible por pandas. Es el archivo que le envía otra área a SAIGC.
                 
             ruta_archivo_complementario (str, optional): Ruta a un archivo Pickle (.pkl) que contiene datos complementarios.
                 Este archivo debe existir y ser legible por pandas.
@@ -72,15 +75,15 @@ class AsignacionBase:
             if not os.path.exists(ruta_archivo_complementario):
                 raise FileNotFoundError(f"No se encontró el archivo complementario: {ruta_archivo_complementario}")
                 
-            Programas_EFT_Oferta = pd.read_pickle(ruta_archivo_complementario)
-            Programas_EFT_Oferta = Programas_EFT_Oferta.rename(columns=NOMBRE_COLUMNAS_MAPPING_COMPLEMENTO)
-            Programas_EFT_Oferta = Programas_EFT_Oferta.astype(TIPO_COLUMNAS_MAPPING_COMPLEMENTO)
+            df_complementario = pd.read_pickle(ruta_archivo_complementario)
+            df_complementario = df_complementario.rename(columns=NOMBRE_COLUMNAS_MAPPING_COMPLEMENTO)
+            df_complementario = df_complementario.astype(TIPO_COLUMNAS_MAPPING_COMPLEMENTO)
             
-            Programas_EFT_Oferta = Programas_EFT_Oferta[COLUMNAS_PROGRAMAS_EFT_OFERTA]
+            df_complementario = df_complementario[COLUMNAS_COMPLEMENTO]
             
-            # Unir Programas_EFT y Programas_EFT_Oferta
+            # Unir Programas_EFT y df_complementario
             Programas_EFT = Programas_EFT.merge(
-                Programas_EFT_Oferta,
+                df_complementario,
                 how='left',
                 on=[self.__llave_cruce]
             )
@@ -94,58 +97,73 @@ class AsignacionBase:
         # Guardar resultado como atributo de instancia
         self.data = Programas_EFT[self.columnas_relevantes]
 
-    def validar_datos(self, archivo_complementario_activado = True) -> None:
+    def validar_datos(self, nombre_archivo_externo, dict_nombres = NOMBRE_COLUMNAS_MAPPING_EXTERNO, dict_tipado = TIPO_COLUMNAS_MAPPING_EXTERNO) -> None:
         """
-        Valida y logea los siguiented problemas de la data importada:
+        ## TO DO: Validación para el archivo complementario
+        
+        Valida y logea los siguientes problemas de la data importada:
         1. Nombres con espacios en blanco extra
         2. Columnas faltantes
         3. Columnas con valores nulos
-        4. Columnas con datos no esperados
+        4. Columnas con tipos de datos no esperados
     
         Guarda los resultados en self.errores_validacion como una lista de strings.
         """
 
-        df = self.data.copy()
+        #Ruta con el archivo principal
+        ruta_archivo_externo = self.ruta_cargar + nombre_archivo_externo
         
-        columnas_requeridas = list(TIPO_COLUMNAS_MAPPING_EXTERNO.keys())
+        # Cargar archivo principal
+        df = pd.read_excel(ruta_archivo_externo)        
         
-        if archivo_complementario_activado:
-            columnas_requeridas += list(TIPO_COLUMNAS_MAPPING_COMPLEMENTO.keys())
+        #Listamos las columnas obligatorias
+        columnas_requeridas = list(dict_nombres.keys())
 
-    
         # 1. Verificar columnas con espacios al inicio o final
         columnas_con_espacios = [col for col in df.columns if col != col.strip()]
         if columnas_con_espacios:
+            warnings.warn("Existen columnas con espacios adicionales", category=UserWarning)
             self.errores_validacion.append(
                 f"Columnas con espacios al inicio o final: {columnas_con_espacios}"
             )
-    
+        
         # 2. Verificar columnas faltantes
         columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
         if columnas_faltantes:
+            warnings.warn(
+                "Faltan columnas indispensables para el proceso de asignación. "
+                "Debe asegurarse de que estén para continuar con el proceso",
+                category=UserWarning
+            )
             self.errores_validacion.append(
                 f"Faltan columnas requeridas: {columnas_faltantes}"
             )
-    
-        # Si faltan columnas, no continúes con las siguientes validaciones
-        if columnas_faltantes:
+            exportar_log_errores(self.errores_validacion)
+            #Se interrumpe el proceso
             return
-    
+        
         # 3. Verificar valores nulos en columnas requeridas
         columnas_con_nulos = df[columnas_requeridas].isnull().any()
         columnas_con_nulos = columnas_con_nulos[columnas_con_nulos].index.tolist()
         if columnas_con_nulos:
+            warnings.warn("Existen columnas indispensables con valores nulos", category=UserWarning)
             self.errores_validacion.append(
                 f"Columnas con valores nulos: {columnas_con_nulos}"
             )
-    
+        
         # 4. Verificar tipos de datos
-        for col, tipo_esperado in constants.TIPO_COLUMNAS_MAPPING.items():
+        for col in dict_nombres.keys():
             tipo_actual = str(df[col].dtype)
+            temp_col = dict_nombres[col]
+            tipo_esperado = dict_tipado[temp_col]
             if tipo_esperado.lower() not in tipo_actual.lower():
+                warnings.warn("Existen columnas indispensables con tipado no adecuado", category=UserWarning)
                 self.errores_validacion.append(
                     f"Tipo incorrecto en '{col}': se esperaba '{tipo_esperado}', se encontró '{tipo_actual}'"
                 )
+                
+        exportar_log_errores(self.errores_validacion)
+
 
         
     def crear_rutas(self, nombre_archivo_externo, nombre_archivo_complementario=None):

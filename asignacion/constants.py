@@ -44,7 +44,10 @@ TIPO_COLUMNAS_MAPPING_EXTERNO = {
     "direccion_sede": "str",
     "isoeft" : "float",
     "ocupacion": "str",
-    "ipo": "float"
+    "ipo": "float",
+    "ruta_habilitada" : "str",
+    "valor_programa_indexado" : "float",
+    "numero_maximo_cupos": "Int64"
 }
 
 TIPO_COLUMNAS_MAPPING_COMPLEMENTO = {
@@ -59,7 +62,7 @@ TIPO_COLUMNAS_MAPPING_COMPLEMENTO = {
 
 
 # Columnas para quedarse con la data complementaria
-COLUMNAS_PROGRAMAS_EFT_OFERTA = [
+COLUMNAS_COMPLEMENTO = [
     'cod_CNO',
     'cod_CNO3d',
     'cod_CNO2d',
@@ -70,7 +73,7 @@ COLUMNAS_PROGRAMAS_EFT_OFERTA = [
 ]
 
 #son las columnas que queremos manipular en todo el proceso
-COLUMNAS_RELEVANTES_BASE = [
+COLUMNAS_EXTERNO = [
     'ruta_habilitada',
     'nombre_institucion',
     'ocupacion',

@@ -22,8 +22,8 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         self.data = data
         
         #Atributos para guardar los recursos de la primera y segunda asignacion de recursos
-        self.primera_asignacion = None
-        self.segunda_asignacion = None
+        self.primera_asignacion = pd.DataFrame()
+        self.segunda_asignacion = pd.DataFrame()
 
         
         #Garantiza que al instanciar la clase, se calculen inmediatamente los recursos por cno.

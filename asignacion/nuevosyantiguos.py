@@ -21,14 +21,15 @@ class AsignacionNuevosAntiguos(AsignacionBase):
         
         super().__init__(RECURSOS_POR_RUTA[nombre_ruta])
         self.data = data
-        self.recursosxcno = None
+        self.recursosxcno = pd.DataFrame()
         self.nombre_ruta = nombre_ruta
 
         self.calcular_recursos_por_cno()
         
     def _ponderar_ipo(self, alfa = 1, ponderar = True):
         """
-        Calcula un ipo ponderado como (ipo^alfa) * cupos, si `ponderar` es True.
+        Calcula el IPO ponderado como (ipo^alfa) * cupos, si `ponderar` es True.
+        De lo contrario no pondera el IPO. 
     
         Parámetros:
         - alfa (float): Exponente aplicado al ipo (≥ 1).
@@ -53,7 +54,6 @@ class AsignacionNuevosAntiguos(AsignacionBase):
 
     def calcular_recursos_por_cno(self, alfa=1, ponderar=True, group=['cod_CNO']):
         """
-        
         Calcula y distribuye recursos por grupo ocupacional (CNO) según el ipo ponderado.
     
         Aplica una ponderación al ipo, agrupa los datos por las columnas especificadas en `group`,
@@ -86,7 +86,7 @@ class AsignacionNuevosAntiguos(AsignacionBase):
             .groupby(group)
             .agg(
                 ipo_ponderado=('ipo_ponderado', 'sum'),
-                CUPOS=('numero_cupos_ofertar', 'sum'),
+                cuposxcno=('numero_cupos_ofertar', 'sum'),
                 ipo=('ipo', 'sum'),
                 n_programas=('ipo_ponderado', 'count')
             )
@@ -96,11 +96,8 @@ class AsignacionNuevosAntiguos(AsignacionBase):
         # Calcular participación relativa y asignar recursos
         grouped['participacion_ipo'] = grouped['ipo_ponderado'] / ipo_ponderado_total
         grouped['recursosxcno'] = grouped['participacion_ipo'] * self.recursos_disponibles
-    
-        # Seleccionar columnas finales
-        result = grouped[group + ['recursosxcno', 'n_programas']]
         
-        self.recursosxcno = result
+        self.recursosxcno = grouped
         
         # Agregar columna de recursos al DataFrame original
         self.data = self.data.merge(
@@ -109,7 +106,7 @@ class AsignacionNuevosAntiguos(AsignacionBase):
             how='left'
         )
 
-        return result
+        return grouped
 
     def exportar_recursos_por_cno(self):
         """
