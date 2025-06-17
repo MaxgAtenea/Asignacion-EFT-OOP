@@ -54,11 +54,11 @@ class AsignacionNuevosAntiguos(AsignacionBase):
 
     def calcular_recursos_por_cno(self, alfa=1, ponderar=True, group=['cod_CNO']):
         """
-        Calcula y distribuye recursos por grupo ocupacional (CNO) según el ipo ponderado.
+        Calcula y distribuye recursos por grupo ocupacional (CNO) en función del ipo ponderado.
     
         Aplica una ponderación al ipo, agrupa los datos por las columnas especificadas en `group`,
         calcula la participación relativa de cada grupo en el total ponderado y asigna recursos
-        proporcionalmente.
+        proporcionalmente. Adjunta los resultados al dataframe self.data.
     
         Parámetros:
         ----------
@@ -112,7 +112,7 @@ class AsignacionNuevosAntiguos(AsignacionBase):
         """
         Exporta el resultado de los recursos asignados por cno
         """
-        ruta =  "../" + self.ruta_exportar + self.subdirectorio_resultados + "recursosxcno_" + self.nombre_ruta + ".xlsx"
+        ruta =  "../" + self.path_export + self._subdirectorio_resultados + "recursosxcno_" + self.nombre_ruta + ".xlsx"
         print(f"Guardado en: {ruta}")
         self.recursosxcno.to_excel(ruta , index=False)
 

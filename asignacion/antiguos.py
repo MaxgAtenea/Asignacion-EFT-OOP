@@ -10,7 +10,7 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
     Clase encargada de gestionar la asignación de recursos para la ruta 'Antiguos'.
     """
 
-    def __init__(self, data):
+    def __init__(self, data: pd.DataFrame):
         """
         Inicializa la asignación con los recursos disponibles específicos para la ruta antiguos.
 
@@ -29,7 +29,7 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         #Garantiza que al instanciar la clase, se calculen inmediatamente los recursos por cno.
         self.calcular_recursos_por_cno()
         #Ordenamos por ISOEFT (condición necesaria para la asignacion de recursos)
-        self.ordenar_ocupaciones_por_isoeft()
+
         #Garantiza que al instanciar la clase, se calcule la segunda asignacion e implicitamente la primera asignacion
         self.asignar_recursos_segunda_etapa()
 
@@ -75,7 +75,7 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         # Concatenar
         self.data = pd.concat([sin_nan, con_nan], ignore_index=True)
 
-    def asignar_recursos_primera_etapa(self):
+    def _asignar_recursos_primera_etapa(self):
         """
         Asigna cupos y recursos por ocupacion según los lineamientos de la Ruta Antiguos, paso 2
     
@@ -115,7 +115,7 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         data['recurso_asignado_2E'] = data['cupos_asignados_2E'] * data[COLUMNA_VALOR_PROGRAMA]
     
         # Paso 4: Agrupar para obtener resumen de asignaciones por ocupacion
-        asignacion_por_ocupacion_ant = data.groupby(['cod_CNO', 'ocupacion']).agg(
+        asignacion_por_ocupacion = data.groupby(['cod_CNO', 'ocupacion']).agg(
             recurso_asignado_2E=('recurso_asignado_2E', 'sum'),
             cupos_asignados_2E=('cupos_asignados_2E', 'sum')
         ).reset_index()
@@ -127,39 +127,45 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         ).reset_index()
     
         # Paso 6: Unir ambas tablas
-        asignacion_por_ocupacion_ant = asignacion_por_ocupacion_ant.merge(
+        asignacion_por_ocupacion = asignacion_por_ocupacion.merge(
             recursos_por_ocupacion, on=['cod_CNO', 'ocupacion']
         )
     
         # Paso 7: Calcular saldos no asignados
-        asignacion_por_ocupacion_ant['Saldo_No_Asignado_2E'] = (
-            asignacion_por_ocupacion_ant['recursosxcno'] - asignacion_por_ocupacion_ant['recurso_asignado_2E']
+        asignacion_por_ocupacion['Saldo_No_Asignado_2E'] = (
+            asignacion_por_ocupacion['recursosxcno'] - asignacion_por_ocupacion['recurso_asignado_2E']
         )
     
-        asignacion_por_ocupacion_ant['cupos_no_asignados_2E'] = (
-            asignacion_por_ocupacion_ant['numero_cupos_ofertar'] - asignacion_por_ocupacion_ant['cupos_asignados_2E']
+        asignacion_por_ocupacion['cupos_no_asignados_2E'] = (
+            asignacion_por_ocupacion['numero_cupos_ofertar'] - asignacion_por_ocupacion['cupos_asignados_2E']
         )
 
+        self.recursos_asignados = asignacion_por_ocupacion['recurso_asignado_2E'].sum()
+        self.recursos_disponibles -= self.recursos_asignados
         self.primera_asignacion = data
         
-        return asignacion_por_ocupacion_ant
+        return asignacion_por_ocupacion
         
     def asignar_recursos_segunda_etapa(self):
         """
         Asigna recursos sobrantes de la segunda etapa a programas priorizados en una tercera etapa,
         usando una bolsa común. Actualiza el DataFrame original con asignaciones adicionales.
+        # TODO: 
+            1. En el tests assert si data['Saldo_Remanente_3E'] == self.recursos_disponibles
         """
         
-        asignacion_por_ocupacion = self.asignar_recursos_primera_etapa()
+        asignacion_por_ocupacion = self._asignar_recursos_primera_etapa()
+
+        #saldo_comun_3E = asignacion_por_ocupacion['Saldo_No_Asignado_2E'].sum()
+        saldo_comun_3E = self.recursos_disponibles
         
-        saldo_comun_3E = asignacion_por_ocupacion['Saldo_No_Asignado_2E'].sum()
         
         data = self.primera_asignacion.copy()
         
         data['cupos_asignados_3E'] = 0
         data['recurso_asignado_3E'] = 0.0
         
-        #TODO: verificar si esta condicion es redundante | acondicionarla para la clase
+        #TODO: verificar en el test si ordenar_por_isoeft es redundante | acondicionarla para la clase:
         #      data = ordenar_ocupaciones_por_isoeft(data)
     
         for idx, row in data.iterrows():
@@ -187,12 +193,11 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         data['Total_Cupos_Asignados'] = data['cupos_asignados_2E'] + data['cupos_asignados_3E']
         data['Total_Recurso_Asignado'] = data['recurso_asignado_2E'] + data['recurso_asignado_3E']
         data['Saldo_Remanente_3E'] = saldo_comun_3E
+
+        self.recursos_disponibles -= data['recurso_asignado_3E'].sum()
+        self.recursos_asignados += data['recurso_asignado_3E'].sum()
+        
         
         self.segunda_asignacion = data    
-        
-    def validar_datos(self):
-        """
-        Valida las pre-condiciones específicas para los datos de programas.
-        """
-        pass
+        self.asignacion = data
 

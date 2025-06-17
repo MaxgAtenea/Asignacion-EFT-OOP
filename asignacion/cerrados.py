@@ -12,14 +12,20 @@ class AsignacionCerrados(AsignacionBase):
         super().__init__(RECURSOS_POR_RUTA["cerrados"])
         self.data = data
 
-    def preparar_datos_cerrados(self):
+    def preparar_datos(self):
         """
         Aplica reglas y filtros específicos para programas cerrados.
         """
         pass
 
-    def asignar_recursos_cerrados(self):
+    def asignar_recursos(self):
         """
         Implementa la lógica de asignación de recursos específica para la ruta 'Cerrados'.
+        """
+        pass
+
+    def ordenar_programas(self):
+        """
+        TODO: Definir
         """
         pass

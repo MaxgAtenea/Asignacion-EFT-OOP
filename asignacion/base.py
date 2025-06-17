@@ -21,21 +21,26 @@ class AsignacionBase:
     (antiguos, viejos, cerrados), tales como validaciones, carga de datos y operaciones genéricas.
     """
 
-    def __init__(self, recursos_disponibles = None):
+    def __init__(self, recursos_iniciales = 0):
         """
         Inicializa la asignación con los recursos disponibles específicos para la ruta.
 
         Parameters:
-        - recursos_disponibles (int): Monto total de recursos disponibles para esta ruta.
+        - recursos_disponibles (int): Monto total de recursos disponibles
         """
-        self.recursos_disponibles = recursos_disponibles
+        self.recursos_iniciales = recursos_iniciales
+        self.recursos_asignados = 0
+        self.recursos_disponibles = self.recursos_iniciales
+        
         self.data = pd.DataFrame()
+        self.asignacion = pd.DataFrame()
+        
         self.__llave_cruce = "codigo_programa" #llave para cruzar los documentos crudos
-        self.ruta_cargar = "../input/"
-        self.ruta_exportar = "output/"
-        self.subdirectorio_resultados = "results/"
-        self.columnas_relevantes = COLUMNAS_EXTERNO + COLUMNAS_COMPLEMENTO
-        self.errores_validacion = []
+        self.path_load = "../input/"
+        self.path_export = "output/"
+        self._subdirectorio_resultados = "results/"
+        self._columnas_relevantes = COLUMNAS_EXTERNO + COLUMNAS_COMPLEMENTO
+        self._errores_validacion = []
     
     # TO DO: En el contrato de la función está pendiente especificar las condiciones que se esperan de ruta_archivo_externo (archvio que viene de otra area)
     # TO DO: Definir si en esta función van las pruebas de 
@@ -54,8 +59,8 @@ class AsignacionBase:
             FileNotFoundError: Si alguno de los archivos proporcionados no existe.
         """
 
-        ruta_archivo_externo = self.ruta_cargar +  nombre_archivo_externo
-        ruta_archivo_complementario = self.ruta_cargar + nombre_archivo_complementario
+        ruta_archivo_externo = self.path_load +  nombre_archivo_externo
+        ruta_archivo_complementario = self.path_load + nombre_archivo_complementario
         
         #Validar que existe ruta_archivo_externo
         if not os.path.exists(ruta_archivo_externo):
@@ -95,7 +100,7 @@ class AsignacionBase:
             print(f"Programas que NO cruzaron: {no_cruzaron}")
         
         # Guardar resultado como atributo de instancia
-        self.data = Programas_EFT[self.columnas_relevantes]
+        self.data = Programas_EFT[self._columnas_relevantes]
 
     def validar_datos(self, nombre_archivo_externo, dict_nombres = NOMBRE_COLUMNAS_MAPPING_EXTERNO, dict_tipado = TIPO_COLUMNAS_MAPPING_EXTERNO) -> None:
         """
@@ -107,11 +112,11 @@ class AsignacionBase:
         3. Columnas con valores nulos
         4. Columnas con tipos de datos no esperados
     
-        Guarda los resultados en self.errores_validacion como una lista de strings.
+        Guarda los resultados en self._errores_validacion como una lista de strings.
         """
 
         #Ruta con el archivo principal
-        ruta_archivo_externo = self.ruta_cargar + nombre_archivo_externo
+        ruta_archivo_externo = self.path_load + nombre_archivo_externo
         
         # Cargar archivo principal
         df = pd.read_excel(ruta_archivo_externo)        
@@ -123,7 +128,7 @@ class AsignacionBase:
         columnas_con_espacios = [col for col in df.columns if col != col.strip()]
         if columnas_con_espacios:
             warnings.warn("Existen columnas con espacios adicionales", category=UserWarning)
-            self.errores_validacion.append(
+            self._errores_validacion.append(
                 f"Columnas con espacios al inicio o final: {columnas_con_espacios}"
             )
         
@@ -135,10 +140,10 @@ class AsignacionBase:
                 "Debe asegurarse de que estén para continuar con el proceso",
                 category=UserWarning
             )
-            self.errores_validacion.append(
+            self._errores_validacion.append(
                 f"Faltan columnas requeridas: {columnas_faltantes}"
             )
-            exportar_log_errores(self.errores_validacion)
+            exportar_log_errores(self._errores_validacion)
             #Se interrumpe el proceso
             return
         
@@ -147,7 +152,7 @@ class AsignacionBase:
         columnas_con_nulos = columnas_con_nulos[columnas_con_nulos].index.tolist()
         if columnas_con_nulos:
             warnings.warn("Existen columnas indispensables con valores nulos", category=UserWarning)
-            self.errores_validacion.append(
+            self._errores_validacion.append(
                 f"Columnas con valores nulos: {columnas_con_nulos}"
             )
         
@@ -158,11 +163,11 @@ class AsignacionBase:
             tipo_esperado = dict_tipado[temp_col]
             if tipo_esperado.lower() not in tipo_actual.lower():
                 warnings.warn("Existen columnas indispensables con tipado no adecuado", category=UserWarning)
-                self.errores_validacion.append(
+                self._errores_validacion.append(
                     f"Tipo incorrecto en '{col}': se esperaba '{tipo_esperado}', se encontró '{tipo_actual}'"
                 )
                 
-        exportar_log_errores(self.errores_validacion)
+        exportar_log_errores(self._errores_validacion)
 
 
         
@@ -195,7 +200,7 @@ class AsignacionBase:
         
         return rutas_dict 
 
-    def calcular_distribucion_recursos(self):
+    def asignar_recursos(self):
         """
         TODO: renombrar clase para ser más entendible
         Ejecuta la lógica genérica de distribución de recursos de TODAS las rutas.
