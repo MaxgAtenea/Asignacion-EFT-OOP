@@ -21,10 +21,13 @@ class AsignacionNuevos(AsignacionNuevosAntiguos):
         
         #Garantiza que al instanciar la clase, se calculen inmediatamente los recursos por cno.
         self.calcular_recursos_por_cno()
-        #Ordenamos por ISOEFT (condición necesaria para la asignacion de recursos)
+        #Ordenamos programas siguiendo criterios (condición necesaria y previa para la asignacion de recursos)
         self._ordenar_programas()
-        #Garantiza que al instanciar la clase, se calcule la segunda asignacion e implicitamente la primera asignacion
-        self.asignar_recursos()        
+        #Garantiza que al instanciar la clase, se calcule la asignacion
+        self.asignar_recursos()    
+        #Identificar los programas con cupos disponibles después de la asignacion
+        self._identificar_programas_disponibles()
+        
 
     def asignar_recursos(self):
         """
@@ -142,4 +145,54 @@ class AsignacionNuevos(AsignacionNuevosAntiguos):
         if programa in PROGRAMA_INFO:
             return pd.Series(PROGRAMA_INFO[programa])
         return pd.Series([row['cod_CNO'], row['ipo']])
+
+    def _identificar_programas_disponibles(self):
+        """
+        Identifica cuales programas después del la asignación quedaron con cupos disponibles.
+        """
+        data = self.asignacion.copy()
+        
+        nuevos_remanente = data[
+            data['numero_cupos_ofertar'] - data['cupos_asignados_2E'] > 0
+        ].reset_index(drop=True)
+
+        self.programas_remanente = nuevos_remanente
+
+    def _reasignar_remanente(self, columna_cupos= 'cupos_asignados_2E'):
+        """
+        Reasigna recursos disponibles (remanente) a los cupos de los programas que no han agotado sus cupos. 
+        Esto se hace hasta agotar el saldo o completar los cupos pendientes.
+        """
+        df_remanente = self.programas_remanente.copy()
+        saldo_total = self.bolsa_comun_disponible
+    
+        for idx, row in df_remanente.iterrows():
+            cupos_restantes =  row['numero_cupos_ofertar'] - row[columna_cupos] 
+            costo = row[columna_valor_programa]
+    
+            if pd.isna(costo) or costo <= 0 or pd.isna(cupos_restantes) or cupos_restantes <= 0:
+                df_remanente.at[idx, 'saldo_total_remanente'] = saldo_total
+                continue
+    
+            recurso_necesario = costo * cupos_restantes
+    
+            if saldo_total >= recurso_necesario:
+                df_remanente.at[idx, 'cupos_asignados_remanente'] = cupos_restantes
+                df_remanente.at[idx, 'recurso_asignado_remanente'] = recurso_necesario
+                saldo_total -= recurso_necesario
+            else:
+                cupos_posibles = saldo_total // costo
+                recurso_asignado = cupos_posibles * costo
+    
+                df_remanente.at[idx, 'cupos_asignados_remanente'] = cupos_posibles
+                df_remanente.at[idx, 'recurso_asignado_remanente'] = recurso_asignado
+                saldo_total -= recurso_asignado
+    
+            df_remanente.at[idx, 'saldo_total_remanente'] = saldo_total
+    
+            if saldo_total <= 0:
+                break
+
+        return df_remanente        
+
     
