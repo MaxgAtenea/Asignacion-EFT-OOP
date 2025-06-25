@@ -3,6 +3,8 @@ from . import constants
 from .constants import COLUMNA_VALOR_PROGRAMA
 from .nuevosyantiguos import AsignacionNuevosAntiguos
 
+from .constants import COLUMNA_VALOR_PROGRAMA
+from .constants import COLUMNA_CUPOS_MAXIMOS
 
 class AsignacionAntiguos(AsignacionNuevosAntiguos):
     """
@@ -39,6 +41,7 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
     def ordenar_ocupaciones_por_isoeft(self):
         """
         ## TODO: Eliminar la posibilidad de que hayan NANS. Esto se debe corregir desde la fuente
+        ## TODO: Si el programa no tiene ISOEFT se omite. 
         
         Ordena un DataFrame por ['cod_CNO', 'ocupacion', 'IPO', 'isoeft_4d'],
         asegurando que las filas con NaN en 'isoeft_4d' queden al final del DataFrame completo.
@@ -72,7 +75,8 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         # Ordenar las filas válidas
         sin_nan = sin_nan.sort_values(
             columnas, 
-            ascending= orden
+            ascending= orden,
+            ignore_index = True
         )
     
         # Concatenar
@@ -114,7 +118,7 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
                     saldo -= cupos_asignables * costo_unitario
                     break
     
-        # Paso 3: Calcular recursos efectivamente asignados por programa
+        # Paso 3: Calcular recursos asignados por programa
         data['recurso_asignado_2E'] = data['cupos_asignados_2E'] * data[COLUMNA_VALOR_PROGRAMA]
     
         # Paso 4: Agrupar para obtener resumen de asignaciones por ocupacion
@@ -159,9 +163,7 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         
         asignacion_por_ocupacion = self._asignar_recursos_primera_etapa()
 
-        #saldo_comun_3E = asignacion_por_ocupacion['Saldo_No_Asignado_2E'].sum()
         saldo_comun_3E = self.recursos_disponibles
-        
         
         data = self.primera_asignacion.copy()
         
@@ -206,7 +208,7 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
         
     def _identificar_programas_disponibles(self):
         """
-        Identifica cuales programas después del la asignación quedaron con cupos disponibles.
+        Identifica cuales programas después de la asignación quedaron con cupos disponibles.
         """        
         data = self.asignacion.copy()
         
@@ -214,19 +216,21 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
             data['numero_cupos_ofertar'] - data['Total_Cupos_Asignados'] > 0
         ].reset_index(drop=True)
         
-        self.programas_remanente = antiguos_remanente
+        self.programas_disponibles = antiguos_remanente
 
-    def _reasignar_remanente(self, columna_cupos= 'cupos_asignados_2E'):
+    def asignar_remanente(self, bolsa, columna_cupos= 'cupos_asignados_2E'):
         """
-        Reasigna recursos disponibles (remanente) a los cupos de los programas que no han agotado sus cupos. 
-        Esto se hace hasta agotar el saldo o completar los cupos pendientes.
+        Asigna recursos disponibles (remanente) a los programas que no han agotado sus cupos. 
+        Esto se hace hasta agotar el saldo o completar los cupos.
+        ## TODO: rectificar en el lineamiento si toca volver a ordenar los programas 
         """
-        df_remanente = self.programas_remanente.copy()
+        df_remanente = self.programas_disponibles.copy()
+        self.bolsa_comun_disponible = bolsa
         saldo_total = self.bolsa_comun_disponible
     
         for idx, row in df_remanente.iterrows():
             cupos_restantes =  row['numero_cupos_ofertar'] - row[columna_cupos] 
-            costo = row[columna_valor_programa]
+            costo = row[COLUMNA_VALOR_PROGRAMA]
     
             if pd.isna(costo) or costo <= 0 or pd.isna(cupos_restantes) or cupos_restantes <= 0:
                 df_remanente.at[idx, 'saldo_total_remanente'] = saldo_total
@@ -250,6 +254,11 @@ class AsignacionAntiguos(AsignacionNuevosAntiguos):
     
             if saldo_total <= 0:
                 break
+
+        self.bolsa_comun_disponible = saldo_total
+        self.programas_remanantes = df_remanente
+
+        self.recursos_asignados += df_remanente['recurso_asignado_remanente'].sum()
 
         return df_remanente
 

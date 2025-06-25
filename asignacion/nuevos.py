@@ -94,7 +94,7 @@ class AsignacionNuevos(AsignacionNuevosAntiguos):
         
         self.recursos_asignados = asignacion_por_ocupacion['recurso_asignado_2E'].sum()
         self.recursos_disponibles -= self.recursos_asignados
-        self.asignacion = asignacion_por_ocupacion
+        self.asignacion = data
 
     def _ordenar_programas(self,usar_cod_cno=True):
         """
@@ -156,19 +156,20 @@ class AsignacionNuevos(AsignacionNuevosAntiguos):
             data['numero_cupos_ofertar'] - data['cupos_asignados_2E'] > 0
         ].reset_index(drop=True)
 
-        self.programas_remanente = nuevos_remanente
+        self.programas_disponibles = nuevos_remanente
 
-    def _reasignar_remanente(self, columna_cupos= 'cupos_asignados_2E'):
+    def asignar_remanente(self, bolsa, columna_cupos= 'cupos_asignados_2E'):
         """
         Reasigna recursos disponibles (remanente) a los cupos de los programas que no han agotado sus cupos. 
         Esto se hace hasta agotar el saldo o completar los cupos pendientes.
         """
-        df_remanente = self.programas_remanente.copy()
+        df_remanente = self.programas_disponibles.copy()
+        self.bolsa_comun_disponible = bolsa
         saldo_total = self.bolsa_comun_disponible
     
         for idx, row in df_remanente.iterrows():
             cupos_restantes =  row['numero_cupos_ofertar'] - row[columna_cupos] 
-            costo = row[columna_valor_programa]
+            costo = row[COLUMNA_VALOR_PROGRAMA]
     
             if pd.isna(costo) or costo <= 0 or pd.isna(cupos_restantes) or cupos_restantes <= 0:
                 df_remanente.at[idx, 'saldo_total_remanente'] = saldo_total
@@ -193,6 +194,9 @@ class AsignacionNuevos(AsignacionNuevosAntiguos):
             if saldo_total <= 0:
                 break
 
-        return df_remanente        
+        self.bolsa_comun_disponible = saldo_total
+        self.programas_remanantes = df_remanente
 
-    
+        self.recursos_asignados += df_remanente['recurso_asignado_remanente'].sum()
+
+        return df_remanente

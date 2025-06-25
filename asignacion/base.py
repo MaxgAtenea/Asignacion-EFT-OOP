@@ -37,7 +37,8 @@ class AsignacionBase:
         
         self.data = pd.DataFrame()
         self.asignacion = pd.DataFrame()
-        self.programas_remanente = pd.DataFrame()
+        self.programas_disponibles = pd.DataFrame()
+        self.programas_remanantes = pd.Dataframe()
         
         self.__llave_cruce = "codigo_programa" #llave para cruzar los documentos crudos
         self.path_load = "../input/"
@@ -204,11 +205,11 @@ class AsignacionBase:
         
         return rutas_dict 
 
-    def _actualizar_bolsa_comun(self,bolsa_antiguos, bolsa_nuevos, bolsa_cerrados):
+    def _actualizar_bolsa_comun(self, bolsa_antiguos, bolsa_nuevos, bolsa_cerrados):
         """
         Calcula la bolsa comun a partir de los recursos sobrantes de las 3 rutas.
         """
-        self.bolsa_comun = bolsa_antiguos + bolsa_nuevos + bolsa_cerrados
+        self.bolsa_comun_disponible = bolsa_antiguos + bolsa_nuevos + bolsa_cerrados
                 
         
     def asignar_recursos(self):

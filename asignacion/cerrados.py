@@ -2,6 +2,10 @@ import pandas as pd
 from . import constants
 from .base import AsignacionBase
 
+from .constants import RECURSOS_POR_RUTA
+from .constants import COLUMNA_VALOR_PROGRAMA
+from .constants import COLUMNA_CUPOS_MAXIMOS
+
 class AsignacionCerrados(AsignacionBase):
     """
     ## TODO: Terminar de escribir el objetivo de la clase
@@ -40,8 +44,8 @@ class AsignacionCerrados(AsignacionBase):
         saldo_total = self.recursos_iniciales
     
         for idx, row in data.iterrows():
-            costo = row[columna_valor_programa]
-            cupos = min(row['numero_cupos_ofertar'], row[columna_cupos_maximos])
+            costo = row[COLUMNA_VALOR_PROGRAMA]
+            cupos = min(row['numero_cupos_ofertar'], row[COLUMNA_CUPOS_MAXIMOS])
     
             if pd.isna(costo) or costo <= 0 or pd.isna(cupos) or cupos <= 0:
                 data.at[idx, 'saldo_total_remanente'] = saldo_total
@@ -121,11 +125,58 @@ class AsignacionCerrados(AsignacionBase):
             data['numero_cupos_ofertar'] - data['cupos_asignados_2E'] > 0
         ].reset_index(drop=True)
 
-        self.programas_remanente = grupos_cerrados_remanente
+        self.programas_disponibles = grupos_cerrados_remanente
 
-    def __reasignar_remanente(self):
+    def asignar_remanente(self, bolsa):
         """
+        TODO: completar definicion de la función.
+        Asigna recursos a programas de grupos cerrados hasta agotar el saldo total disponible.
         TODO: Implementar función.
-        Propuesta: hacer la funcion asignar_recursos() reutilizable
+        Parametros:
+
+        Retorna:
         """
+        df_remanente =self.programas_disponibles.copy()
+        self.bolsa_comun_disponible = bolsa
+        saldo_total = self.bolsa_comun_disponible
+
+        df_remanente['cupos_asignados_2E'] = 0  
+        df_remanente['recurso_asignado_2E'] = 0.0
+        df_remanente['saldo_total_remanente'] = 0.0
+
+        
+        for idx, row in df_remanente.iterrows():
+            costo = row[COLUMNA_VALOR_PROGRAMA]
+            cupos = min(row['numero_cupos_ofertar'], row[COLUMNA_CUPOS_MAXIMOS])
+    
+            if pd.isna(costo) or costo <= 0 or pd.isna(cupos) or cupos <= 0:
+                df_remanente.at[idx, 'saldo_total_remanente'] = saldo_total
+                continue
+    
+            recurso_necesario = costo * cupos
+    
+            if saldo_total >= recurso_necesario:
+                df_remanente.at[idx, 'cupos_asignados_2E'] = cupos
+                df_remanente.at[idx, 'recurso_asignado_2E'] = recurso_necesario
+                saldo_total -= recurso_necesario
+            else:
                 
+                cupos_posibles = saldo_total // costo
+                recurso_asignado = cupos_posibles * costo
+                
+                df_remanente.at[idx, 'cupos_asignados_2E'] = cupos_posibles
+                df_remanente.at[idx, 'recurso_asignado_2E'] = recurso_asignado
+                saldo_total -= recurso_asignado
+    
+            df_remanente.at[idx, 'saldo_total_remanente'] = saldo_total
+    
+            if saldo_total <= 0:
+                break
+    
+        self.bolsa_comun_disponible = saldo_total
+        self.programas_remanantes = df_remanente
+
+        self.recursos_asignados += df_remanente['recurso_asignado_remanente'].sum()
+
+        return df_remanente
+        
